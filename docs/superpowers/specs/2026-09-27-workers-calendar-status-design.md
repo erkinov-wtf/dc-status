@@ -241,6 +241,7 @@ before anything is built on them:
 | File | Responsibility |
 |---|---|
 | `src/index.ts` | `scheduled` handler: timer gate, run once, log one line |
+| `src/gate.ts` | The timer gate (`shouldRun`), kept separate from the handler so it is trivially testable |
 | `src/config.ts` | Read env, validate, apply defaults, expose typed settings |
 | `src/google.ts` | Service-account JWT, token exchange, `freeBusy` query |
 | `src/discord.ts` | Read and write the custom status |
