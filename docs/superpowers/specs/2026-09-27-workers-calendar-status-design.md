@@ -187,13 +187,15 @@ Implemented in `src/sync.ts`. Inputs: `want` = decision for `now`, `prev` =
 decision for `now − RUN_EVERY_MINUTES`, `have` = the status currently on
 Discord.
 
-`have` is classified by its text, trimmed:
+`have` is classified by its trimmed text and its emoji:
 
 | `have` | Class |
 |---|---|
-| empty / null | **empty** |
+| null, or both text and emoji empty | **empty** |
 | equals `TEXT_IN_CLASS` or `TEXT_TRANSIT` | **ours** |
 | anything else | **manual** |
+
+A status whose `expires_at` is already in the past is treated as empty.
 
 Then:
 
@@ -212,6 +214,8 @@ Notes:
   user chose ("leave it alone until the next window change").
 - Typing `на паре` or `в пути` by hand makes the status count as ours. Accepted;
   it is the price of having no stored state.
+- An emoji-only status is manual: Discord allows them and the Worker never
+  writes one.
 
 ## Discord API
 

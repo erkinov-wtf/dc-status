@@ -19,7 +19,8 @@ describe("classify", () => {
   it.each([
     [null, "empty"],
     [{ text: "", emoji: "", expiresAt: null }, "empty"],
-    [{ text: "  ", emoji: "📚", expiresAt: null }, "empty"],
+    [{ text: "  ", emoji: "📚", expiresAt: null }, "manual"],
+    [{ text: "", emoji: "😴", expiresAt: null }, "manual"],
     [{ text: "на паре", emoji: "📚", expiresAt: null }, "ours"],
     [{ text: " в пути ", emoji: "", expiresAt: null }, "ours"],
     [{ text: "болею", emoji: "🤒", expiresAt: null }, "manual"],
@@ -164,11 +165,40 @@ describe("runOnce", () => {
     expect(r.count(DC_PATCH)).toBe(0);
   });
 
-  it("replaces a manual status right after a window change", async () => {
+  it("leaves an emoji-only status alone mid-window (manual, not empty)", async () => {
+    const r = router(happyRoutes({ text: null, emoji_name: "😴", expires_at: null }));
+    const result = await runOnce(config, r.fn, now);
+    expect(result.action).toEqual({ type: "none", reason: "manual" });
+    expect(r.count(DC_PATCH)).toBe(0);
+  });
+
+  it("replaces a manual status right after a window change (class starts on the grid)", async () => {
     const r = router(happyRoutes({ text: "болею", emoji_name: null, expires_at: null }));
-    const result = await runOnce(config, r.fn, new Date("2026-09-28T04:02:00Z"));
+    const result = await runOnce(config, r.fn, new Date("2026-09-28T04:00:00Z"));
     expect(result.action.type).toBe("write");
     expect(r.count(DC_PATCH)).toBe(1);
+  });
+
+  it("leaves a manual status alone one grid step after a window change", async () => {
+    const r = router(happyRoutes({ text: "болею", emoji_name: null, expires_at: null }));
+    const result = await runOnce(config, r.fn, new Date("2026-09-28T04:05:00Z"));
+    expect(result.action).toEqual({ type: "none", reason: "manual" });
+    expect(r.count(DC_PATCH)).toBe(0);
+  });
+
+  it("restores the fresh status when the previous 'ours' status has already expired", async () => {
+    const r = router(happyRoutes({ text: "на паре", emoji_name: "📚", expires_at: "2026-09-28T04:25:00.000Z" }));
+    const result = await runOnce(config, r.fn, now);
+    expect(result.action).toEqual({ type: "write", status: { text: "на паре", emoji: "📚", expiresAt: new Date("2026-09-28T05:30:00Z") } });
+    expect(result.have).toBeNull();
+    expect(r.count(DC_PATCH)).toBe(1);
+  });
+
+  it("leaves an 'ours' status alone when its expiry is still in the future", async () => {
+    const r = router(happyRoutes({ text: "на паре", emoji_name: "📚", expires_at: "2026-09-28T05:30:00.000Z" }));
+    const result = await runOnce(config, r.fn, now);
+    expect(result.action).toEqual({ type: "none", reason: "unchanged" });
+    expect(r.count(DC_PATCH)).toBe(0);
   });
 
   it.each([

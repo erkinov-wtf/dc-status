@@ -24,10 +24,11 @@ export function toStatus(d: Decision): CustomStatus | null {
   return d.kind === "clear" ? null : { text: d.text, emoji: d.emoji, expiresAt: d.expiresAt };
 }
 
-/** Who owns the bubble: nobody, this job, or the user. Judged by text only. */
+/** Who owns the bubble: nobody, this job, or the user. Judged by trimmed text and emoji. */
 export function classify(have: CustomStatus | null, labels: Labels): HaveClass {
   const text = have?.text.trim() ?? "";
-  if (text === "") return "empty";
+  const emoji = have?.emoji ?? "";
+  if (text === "" && emoji === "") return "empty";
   if (text === labels.textInClass || text === labels.textTransit) return "ours";
   return "manual";
 }
@@ -64,7 +65,8 @@ export async function runOnce(
     new Date(now.getTime() + DAY_MS),
     fetchFn,
   );
-  const have = await readStatus(config.discordToken, fetchFn);
+  const rawHave = await readStatus(config.discordToken, fetchFn);
+  const have = rawHave?.expiresAt && rawHave.expiresAt.getTime() <= now.getTime() ? null : rawHave;
 
   const want = decide(now, busy, config.windows, config.labels);
   const prevAt = new Date(now.getTime() - config.runEveryMinutes * 60_000);
