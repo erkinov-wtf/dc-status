@@ -34,6 +34,7 @@ export async function readStatus(token: string, fetchFn: FetchFn): Promise<Custo
   const res = await fetchFn(SETTINGS_URL, { method: "GET", headers: headers(token) });
   if (!res.ok) throw new DiscordError(`Discord read failed: HTTP ${res.status}`, res.status);
   const body = (await res.json()) as { custom_status?: RawCustomStatus | null };
+  if (!("custom_status" in body)) throw new DiscordError("Discord settings response has no custom_status field");
   const raw = body.custom_status;
   if (!raw) return null;
   return {

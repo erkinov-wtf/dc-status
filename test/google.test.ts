@@ -35,6 +35,7 @@ describe("getAccessToken", () => {
     expect(token).toBe("ya29.abc");
     expect(calls[0].url).toBe(TOKEN_URL);
     expect(calls[0].init?.method).toBe("POST");
+    expect(new Headers(calls[0].init?.headers).get("Content-Type")).toBe("application/x-www-form-urlencoded");
     const params = new URLSearchParams(calls[0].init?.body as string);
     expect(params.get("grant_type")).toBe("urn:ietf:params:oauth:grant-type:jwt-bearer");
 
@@ -84,6 +85,7 @@ describe("fetchBusy", () => {
     expect(calls[0].url).toBe(FREEBUSY_URL);
     expect(calls[0].init?.method).toBe("POST");
     expect(new Headers(calls[0].init?.headers).get("Authorization")).toBe("Bearer ya29.abc");
+    expect(new Headers(calls[0].init?.headers).get("Content-Type")).toBe("application/json");
     expect(JSON.parse(calls[0].init?.body as string)).toEqual({
       timeMin: timeMin.toISOString(),
       timeMax: timeMax.toISOString(),
@@ -110,6 +112,18 @@ describe("fetchBusy", () => {
 
   it("throws GoogleError on an HTTP error", async () => {
     const { fn } = fakeFetch(403, { error: { message: "forbidden" } });
+    await expect(fetchBusy("t", CAL, timeMin, timeMax, fn)).rejects.toBeInstanceOf(GoogleError);
+  });
+
+  it("treats a calendar entry with no busy list as a failure", async () => {
+    const { fn } = fakeFetch(200, { calendars: { [CAL]: {} } });
+    await expect(fetchBusy("t", CAL, timeMin, timeMax, fn)).rejects.toBeInstanceOf(GoogleError);
+  });
+
+  it("throws GoogleError when a busy range has an unparseable time", async () => {
+    const { fn } = fakeFetch(200, {
+      calendars: { [CAL]: { busy: [{ start: "not-a-date", end: "2026-09-28T05:30:00Z" }] } },
+    });
     await expect(fetchBusy("t", CAL, timeMin, timeMax, fn)).rejects.toBeInstanceOf(GoogleError);
   });
 });

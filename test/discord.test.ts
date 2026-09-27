@@ -29,6 +29,11 @@ describe("readStatus", () => {
     expect(await readStatus("tok", fn)).toBeNull();
   });
 
+  it("throws DiscordError when custom_status is absent from the body", async () => {
+    const { fn } = fakeFetch(200, {});
+    await expect(readStatus("tok", fn)).rejects.toBeInstanceOf(DiscordError);
+  });
+
   it("returns empty fields when text and emoji are null", async () => {
     const { fn } = fakeFetch(200, { custom_status: { text: null, emoji_name: null, expires_at: null } });
     expect(await readStatus("tok", fn)).toEqual({ text: "", emoji: "", expiresAt: null });

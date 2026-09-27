@@ -75,10 +75,18 @@ export async function fetchBusy(
 
   const body = (await res.json()) as FreeBusyResponse;
   const calendar = body.calendars?.[calendarId];
-  if (!calendar) throw new GoogleError(`Google freeBusy response has no entry for ${calendarId}`);
+  if (!calendar) throw new GoogleError("Google freeBusy response has no entry for the configured calendar");
   if (calendar.errors?.length) {
     const reasons = calendar.errors.map((e) => e.reason).join(", ");
     throw new GoogleError(`Google reports ${reasons} for the calendar — is it shared with the service account?`);
   }
-  return (calendar.busy ?? []).map((b) => ({ start: new Date(b.start), end: new Date(b.end) }));
+  if (!Array.isArray(calendar.busy)) throw new GoogleError("Google freeBusy entry has no busy list");
+  return calendar.busy.map((b) => {
+    const start = new Date(b.start);
+    const end = new Date(b.end);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      throw new GoogleError("Google freeBusy returned an unparseable time");
+    }
+    return { start, end };
+  });
 }
