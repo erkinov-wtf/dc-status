@@ -33,9 +33,8 @@ adds the scheduling around it.
 
 Setting the custom status uses a user token against Discord's private API, which
 is self-botting and technically against Discord's ToS. The user was informed and
-accepted this. Practical risk is low for infrequent, benign personal writes. The
-mitigation that matters is volume: writes happen only on an actual state change,
-not on every tick.
+accepted this. Discord is only contacted when the status actually changes —
+a few times a day — not on every run.
 
 ## Architecture
 
@@ -43,16 +42,25 @@ A single Go binary with four subcommands. No daemon process; `launchd` invokes
 the one-shot `sync` on an interval.
 
 ```
-launchd (every 5 min) ──> dc sync ──> calendar cache (refreshed every 3h)
-                                 └──> Discord settings API (written only on change)
+launchd (every 5 min) ──> dc sync ──> Google iCal feed (conditional GET, every run)
+                                 └──> Discord settings API (only when the status changes)
 ```
 
-Two independent cadences:
+Each `sync` run:
 
-| Cadence | What happens | Why |
-|---|---|---|
-| ~5 min | Re-evaluate the window from the local cache | Cheap, local, keeps the bubble accurate to the minute |
-| ~3 h | Re-fetch the iCal feed from Google | Timetables change rarely; ~8 fetches/day |
+1. **Calendar** — re-fetch the iCal feed with `If-None-Match`. An unchanged
+   calendar returns a 304 and costs almost nothing; an edit to the university
+   calendar is picked up within one run (~5 min).
+2. **Decide** — compute the desired status from the events. Local, no network.
+3. **Unchanged → stop.** If the decision matches what `state.json` says was last
+   written, the run ends without contacting Discord. Most runs end here.
+4. **Changed →** read the current status from Discord (override check), then
+   write the new one and record it in `state.json`.
+
+| Endpoint | Calls per day |
+|---|---|
+| Google iCal feed | ~288, mostly 304 Not Modified |
+| Discord | ~2 per status change, ~10 on a class day |
 
 ### Files
 
@@ -165,8 +173,9 @@ happens in the cleared state, which needs no expiry.
 
 ## Manual override
 
-`state.json` records what the job last wrote. On each `sync`, the job reads the
-current status from Discord and compares:
+`state.json` records what the job last wrote. Discord is only read when the
+computed decision differs from that record — i.e. when the job is about to
+write. At that point it compares Discord's current status:
 
 | Discord's current status | Interpretation | Action |
 |---|---|---|
@@ -189,9 +198,10 @@ intervention.
 
 `ICAL_URL` is Google Calendar's "Secret address in iCal format". The raw
 response is cached to `calendar.ics`, with `cache.json` holding the fetch
-timestamp and the `ETag`. Within the 3h TTL the cache is used directly; past it,
-the feed is re-fetched using `If-None-Match` so an unchanged calendar costs a
-304 rather than a full body.
+timestamp and the `ETag`. With the default `CACHE_TTL` of 5m the feed is
+re-checked on every run, using `If-None-Match` so an unchanged calendar costs a
+304 rather than a full body. The cache exists for resilience, not speed: it is
+what the job falls back to when Google is unreachable.
 
 ### Parsing
 
@@ -241,10 +251,17 @@ the result of the calendar affirmatively saying there is nothing on.
 | Discord write fails | Exit non-zero, do not record it as written in state |
 | Job stops running entirely | Discord's `expires_at` clears the bubble at the next boundary |
 
-Writes are skipped when the computed decision already matches what Discord
-shows, so a 5-minute cadence produces a handful of writes a day rather than 288.
+A run whose decision matches the last-written status makes no Discord call at
+all — neither read nor write.
 
-### Two API details to confirm, not assume
+## Discord API
+
+The job keeps using `PATCH /api/v9/users/@me/settings` with a JSON
+`custom_status` body — the endpoint the current code already uses, verified
+working on 2026-09-22 (set, then read back). This body only touches the custom
+status, so the user's online/idle/DND/invisible setting is never changed.
+
+### Two details to confirm, not assume
 
 Both are verified against the live API during step 1 of the sequencing, before
 anything is built on top of them:
@@ -252,10 +269,12 @@ anything is built on top of them:
 - **Emoji.** A unicode emoji is sent as the literal character in
   `custom_status.emoji_name`, with `emoji_id` null. Confirm the bubble actually
   renders it rather than showing the text only.
-- **Expiry.** `custom_status.expires_at` is expected to accept an RFC3339
-  timestamp. Confirm Discord both accepts it and honours it; if it does not, the
-  expiry safety net is dropped and the `launchd` job's reliability becomes the
-  only guard against a stale bubble. The rest of the design is unaffected.
+- **Expiry.** A capture of the web app shows it attaches an expiry to every
+  custom status (24h by default), so the concept is supported. Confirm the JSON
+  endpoint accepts `custom_status.expires_at` as an RFC3339 timestamp and
+  honours it; if it does not, the expiry safety net is dropped and the `launchd`
+  job's reliability becomes the only guard against a stale bubble. The rest of
+  the design is unaffected.
 
 ## CLI
 
@@ -281,7 +300,7 @@ before any background job is trusted with it.
 | `TRANSIT_BEFORE` | no | `2h` | Pre-class transit window |
 | `TRANSIT_AFTER` | no | `2h` | Post-class transit window |
 | `BREAK_MAX` | no | `2h` | Longest gap still counted as a break inside one block |
-| `CACHE_TTL` | no | `3h` | Calendar re-fetch interval |
+| `CACHE_TTL` | no | `5m` | Calendar re-check interval |
 | `TEXT_IN_CLASS` | no | `на паре` | Bubble text during a class |
 | `TEXT_TRANSIT` | no | `в пути` | Bubble text while travelling |
 | `EMOJI_IN_CLASS` | no | `📚` | Emoji during a class |
@@ -312,8 +331,10 @@ endpoints the cases most likely to be wrong.
 Calendar parsing is tested against checked-in `.ics` fixtures including an RRULE
 series with an EXDATE and a RECURRENCE-ID override. The Discord client sits
 behind an interface so `sync` can be tested with a fake — verifying in
-particular that a no-change decision produces no write, and that a detected
-override produces no write.
+particular that a no-change decision makes no Discord call at all, and that a
+detected override produces no write. The calendar fetch is tested for the
+304 path (cache reused) and the unreachable path (stale cache used, warning
+printed).
 
 ## Implementation sequencing
 
