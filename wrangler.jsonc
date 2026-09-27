@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "dc-status",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "triggers": { "crons": ["* * * * *"] },
+  "observability": { "enabled": true },
+  "vars": {
+    "RUN_EVERY_MINUTES": "5",
+    "TRANSIT_BEFORE_MINUTES": "120",
+    "TRANSIT_AFTER_MINUTES": "120",
+    "BREAK_MAX_MINUTES": "120",
+    "TEXT_IN_CLASS": "на паре",
+    "TEXT_TRANSIT": "в пути",
+    "EMOJI_IN_CLASS": "📚",
+    "EMOJI_TRANSIT": "🚗",
+    "TIMEZONE": "Asia/Tashkent"
+  }
+}
