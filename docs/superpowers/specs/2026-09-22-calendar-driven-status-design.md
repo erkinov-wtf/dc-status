@@ -99,21 +99,46 @@ type Decision struct {
 }
 ```
 
+### Blocks
+
+Classes are first grouped into **blocks**. Sorted by start time, a class joins
+the current block if it starts less than `BREAK_MAX` (default 2h) after the
+block's end; otherwise it opens a new block. Overlapping classes always merge.
+A block spans from its first class's start to its last class's end, breaks
+included.
+
+Blocks exist because of breaks. Scored per class, a 15-minute break between two
+classes sits inside the first class's post-window and the next class's
+pre-window, so it would read as `в пути` — and the bubble would flip
+`на паре` → `в пути` → `на паре` several times a day. Scored per block, a break
+is simply part of the block.
+
 ### Rules
 
-Evaluated strictly in order; the first match wins.
+Evaluated against blocks, strictly in order; the first match wins.
 
-1. **A class is running now** — any event where `Start <= now < End`
+1. **Inside a block** — `Start <= now < End`, breaks included
    → `на паре`, 📚
-2. **Within the pre-window** — any event where `Start-2h <= now < Start`
+2. **Within the pre-window** — `Start-2h <= now < Start`
    → `в пути`, 🚗
-3. **Within the post-window** — any event where `End <= now < End+2h`
+3. **Within the post-window** — `End <= now < End+2h`
    → `в пути`, 🚗
 4. **Otherwise** → cleared
 
-Ordering is what resolves overlaps. On a day with classes at 09:00–10:30 and
-11:00–12:30, the second class's pre-window opens at 09:00, while the first class
-is still running. Rule 1 preceding rule 2 means being in class always wins.
+Travel therefore only appears before a day's first class and after its last,
+plus around any gap of at least `BREAK_MAX`. Example, classes at 09:00–10:30,
+10:45–12:15 and 12:30–14:00:
+
+| Time | Bubble |
+|---|---|
+| 07:00–09:00 | 🚗 в пути |
+| 09:00–14:00 | 📚 на паре (breaks included) |
+| 14:00–16:00 | 🚗 в пути |
+| after 16:00 | cleared |
+
+With the default `BREAK_MAX` equal to the pre-window, a block's pre-window can
+never overlap an earlier block's classes. The rule ordering still guarantees
+being in class wins if the two settings are tuned apart.
 
 ### Expiry
 
@@ -123,14 +148,14 @@ on its own rather than leaving it stale overnight.
 It is **not** simply the end of the matching window. It is the next moment at
 which the decision would actually change, computed by:
 
-1. Collecting all candidate boundary times after `now` — for every event, its
+1. Collecting all candidate boundary times after `now` — for every block, its
    `Start`, `End`, `Start-2h` and `End+2h`.
 2. Sorting them ascending.
 3. Returning the first boundary at which re-running the rules yields a different
    text/emoji than the current decision.
 
 The third step is the important one. Two adjacent transit windows — the
-post-window of one class overlapping the pre-window of the next — produce a
+post-window of one block overlapping the pre-window of the next — produce a
 boundary where the decision does *not* change. Expiring there would clear a
 still-valid `в пути`. Evaluating the rules at each boundary and skipping
 no-change boundaries avoids that.
@@ -255,6 +280,7 @@ before any background job is trusted with it.
 | `ICAL_URL` | yes | — | Secret iCal address |
 | `TRANSIT_BEFORE` | no | `2h` | Pre-class transit window |
 | `TRANSIT_AFTER` | no | `2h` | Post-class transit window |
+| `BREAK_MAX` | no | `2h` | Longest gap still counted as a break inside one block |
 | `CACHE_TTL` | no | `3h` | Calendar re-fetch interval |
 | `TEXT_IN_CLASS` | no | `на паре` | Bubble text during a class |
 | `TEXT_TRANSIT` | no | `в пути` | Bubble text while travelling |
@@ -268,8 +294,10 @@ Durations parse via `time.ParseDuration`.
 `schedule.go` being pure makes the decision table directly testable. Cases:
 
 - Single class: before, at start, mid, at end, in post-window, after.
-- Overlapping pre-window and running class → `на паре` wins.
-- Back-to-back classes with a short gap → gap reads as transit, no flapping.
+- 10–30 minute breaks between classes → `на паре` throughout, never `в пути`.
+- Gap exactly `BREAK_MAX` vs just under → splits into two blocks vs one.
+- Gap longer than `BREAK_MAX` → `в пути` between the two blocks.
+- `BREAK_MAX` tuned shorter than `TRANSIT_BEFORE` → `на паре` still wins overlaps.
 - Adjacent transit windows → expiry skips the no-change boundary.
 - Simultaneous overlapping classes → one decision, latest end respected.
 - Day with no events → cleared, zero expiry.
