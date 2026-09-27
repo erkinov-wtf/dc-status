@@ -1,6 +1,10 @@
+# secrets
 .env
-calendar.ics
-cache.json
-state.json
-dc
-dc-status
+.dev.vars
+*.json.key
+service-account*.json
+
+# node / wrangler
+node_modules/
+.wrangler/
+dist/

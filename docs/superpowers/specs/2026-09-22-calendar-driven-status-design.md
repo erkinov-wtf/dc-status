@@ -1,7 +1,9 @@
 # Calendar-driven Discord status — design
 
 Date: 2026-09-22
-Status: approved, ready for implementation planning
+Status: **superseded** on 2026-09-27 by
+`2026-09-27-workers-calendar-status-design.md` (Cloudflare Workers, stateless,
+Google Calendar API). Kept for the history of the decision logic.
 
 ## Problem
 
