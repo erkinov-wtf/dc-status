@@ -3,6 +3,10 @@
 .dev.vars
 *.json.key
 service-account*.json
+.dev.vars*
+.env*
+*.iam.gserviceaccount.com*.json
+*-[0-9a-f][0-9a-f][0-9a-f][0-9a-f]*.json
 
 # node / wrangler
 node_modules/
