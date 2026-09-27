@@ -48,12 +48,28 @@ describe("loadConfig", () => {
     expect(() => loadConfig({ ...base, [name]: undefined })).toThrow(ConfigError);
   });
 
-  it.each(["0", "abc", "5.5", "-5"])("rejects RUN_EVERY_MINUTES=%s", (v) => {
+  it.each(["0", "abc", "5.5", "-5", "61"])("rejects RUN_EVERY_MINUTES=%s", (v) => {
     expect(() => loadConfig({ ...base, RUN_EVERY_MINUTES: v })).toThrow(/RUN_EVERY_MINUTES/);
+  });
+
+  it("accepts RUN_EVERY_MINUTES at its upper bound", () => {
+    expect(loadConfig({ ...base, RUN_EVERY_MINUTES: "60" }).runEveryMinutes).toBe(60);
   });
 
   it("rejects a non-numeric window", () => {
     expect(() => loadConfig({ ...base, BREAK_MAX_MINUTES: "2h" })).toThrow(/BREAK_MAX_MINUTES/);
+  });
+
+  it.each(["TRANSIT_BEFORE_MINUTES", "TRANSIT_AFTER_MINUTES", "BREAK_MAX_MINUTES"] as const)(
+    "rejects %s at or above 1440",
+    (name) => {
+      expect(() => loadConfig({ ...base, [name]: "1440" })).toThrow(new RegExp(name));
+    },
+  );
+
+  it("accepts a window minutes value just under 1440", () => {
+    const c = loadConfig({ ...base, TRANSIT_AFTER_MINUTES: "1439" });
+    expect(c.windows.transitAfterMs).toBe(1439 * 60_000);
   });
 
   it("rejects a key that is not JSON", () => {

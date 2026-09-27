@@ -39,12 +39,19 @@ function required(env: Env, name: keyof Env): string {
   return value;
 }
 
-function minutes(env: Env, name: keyof Env, fallback: number): number {
+function minutes(
+  env: Env,
+  name: keyof Env,
+  fallback: number,
+  max?: { atMost: number } | { lessThan: number },
+): number {
   const raw = env[name]?.trim();
   if (raw === undefined || raw === "") return fallback;
   if (!/^\d+$/.test(raw)) throw new ConfigError(`${name} must be a whole number of minutes, got "${raw}"`);
   const n = Number(raw);
   if (n <= 0) throw new ConfigError(`${name} must be greater than 0`);
+  if (max && "atMost" in max && n > max.atMost) throw new ConfigError(`${name} must be at most ${max.atMost}`);
+  if (max && "lessThan" in max && n >= max.lessThan) throw new ConfigError(`${name} must be less than ${max.lessThan}`);
   return n;
 }
 
@@ -93,11 +100,11 @@ export function loadConfig(env: Env): Config {
     discordToken: required(env, "DISCORD_TOKEN"),
     serviceAccount: parseServiceAccount(required(env, "GOOGLE_SERVICE_ACCOUNT_KEY")),
     calendarId: required(env, "CALENDAR_ID"),
-    runEveryMinutes: minutes(env, "RUN_EVERY_MINUTES", 5),
+    runEveryMinutes: minutes(env, "RUN_EVERY_MINUTES", 5, { atMost: 60 }),
     windows: {
-      transitBeforeMs: minutes(env, "TRANSIT_BEFORE_MINUTES", 120) * MIN,
-      transitAfterMs: minutes(env, "TRANSIT_AFTER_MINUTES", 120) * MIN,
-      breakMaxMs: minutes(env, "BREAK_MAX_MINUTES", 120) * MIN,
+      transitBeforeMs: minutes(env, "TRANSIT_BEFORE_MINUTES", 120, { lessThan: 1440 }) * MIN,
+      transitAfterMs: minutes(env, "TRANSIT_AFTER_MINUTES", 120, { lessThan: 1440 }) * MIN,
+      breakMaxMs: minutes(env, "BREAK_MAX_MINUTES", 120, { lessThan: 1440 }) * MIN,
     },
     labels: {
       textInClass: label(env, "TEXT_IN_CLASS", "на паре"),
