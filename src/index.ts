@@ -1,4 +1,4 @@
-import { loadConfig, type Env } from "./config";
+import { loadConfig, type Config, type Env } from "./config";
 import { shouldRun } from "./gate";
 import { formatRunLine, formatTime, runOnce } from "./sync";
 
@@ -10,11 +10,11 @@ interface ScheduledController {
 
 export default {
   async scheduled(controller: ScheduledController, env: Env): Promise<void> {
-    let config;
+    let config: Config;
     try {
       config = loadConfig(env);
     } catch (err) {
-      console.error(`config error: ${(err as Error).message}`);
+      console.error(`config error: ${err instanceof Error ? err.message : String(err)}`);
       return;
     }
 
@@ -25,7 +25,9 @@ export default {
       const result = await runOnce(config, fetch, now);
       console.log(formatRunLine(result, config.timezone));
     } catch (err) {
-      console.error(`${formatTime(now, config.timezone)} ${config.timezone} | failed: ${(err as Error).message}`);
+      console.error(
+        `${formatTime(now, config.timezone)} ${config.timezone} | failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   },
 };

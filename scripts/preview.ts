@@ -30,6 +30,9 @@ for (const s of timeline(now, dayEnd, result.busy, config.windows, config.labels
   const label = s.decision.kind === "clear" ? "clear" : `${s.decision.emoji} ${s.decision.text}`;
   console.log(`  ${fmt(s.start)} – ${fmt(s.end)}  ${label}`);
 }
+console.log(
+  `(the last ${config.windows.transitBeforeMs / 60_000} minutes of the timeline are provisional: classes starting just beyond 24h are not fetched)`,
+);
 
 console.log(`\nDiscord shows now: ${formatStatus(result.have)}`);
 console.log(`A real run would do: ${describe(result.action)}`);
