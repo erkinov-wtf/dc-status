@@ -42,6 +42,7 @@ describe("getAccessToken", () => {
     const { payload, protectedHeader } = await jwtVerify(params.get("assertion")!, publicKey, {
       issuer: key.client_email,
       audience: TOKEN_URL,
+      currentDate: now,
     });
     expect(protectedHeader.alg).toBe("RS256");
     expect(payload.scope).toBe("https://www.googleapis.com/auth/calendar.readonly");
