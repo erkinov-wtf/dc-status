@@ -4,6 +4,7 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-09-01",
   "triggers": { "crons": ["* * * * *"] },
+  "workers_dev": false,
   "observability": { "enabled": true },
   "vars": {
     "RUN_EVERY_MINUTES": "5",
