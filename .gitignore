@@ -14,3 +14,7 @@ dc-status-key.json
 node_modules/
 .wrangler/
 dist/
+
+# local agent scratch
+.superpowers/
+.claude/worktrees/
