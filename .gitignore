@@ -7,6 +7,8 @@ service-account*.json
 .env*
 *.iam.gserviceaccount.com*.json
 *-[0-9a-f][0-9a-f][0-9a-f][0-9a-f]*.json
+*-key.json
+dc-status-key.json
 
 # node / wrangler
 node_modules/
